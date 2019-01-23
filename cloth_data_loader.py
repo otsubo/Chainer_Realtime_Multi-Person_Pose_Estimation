@@ -203,16 +203,25 @@ class ClothDataLoader(DatasetMixin):
         #todo: calculate pafs, heatmaps and return them
         #poses = self.parse_coco_annotation(annotations)
         img, pafs, heatmaps = self.generate_labels(img, pose)
-        return img, pafs, heatmaps
+        return img, pafs, heatmaps,pose
 
 if __name__ =='__main__':
     import matplotlib.pyplot as plt
     dataset = ClothDataLoader('train')
     for i in range(len(dataset)):
-        img, pafs, heatmaps = dataset.get_example(i)
+        img, pafs, heatmaps, pose = dataset.get_example(i)
         print(img)
         print(pafs)
         print(heatmaps)
+        print(pose)
+        img_to_show = img.copy()
+        img_to_show = dataset.overlay_pafs(img_to_show, pafs)
+        img_to_show = dataset.overlay_heatmap(img_to_show, heatmaps[:-1].max(axis=0))
+
+        cv2.imshow('w', np.hstack((img, img_to_show)))
+        k = cv2.waitKey(0)
+        if k == ord('q'):
+            sys.exit()
     # for i in range(len(dataset)):
     #     label_viz = hogehoge #todo
     #     plt.subplot((221))
