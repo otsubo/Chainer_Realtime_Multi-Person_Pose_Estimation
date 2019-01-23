@@ -17,7 +17,7 @@ import cv2
 import math
 import random
 
-from entity import JointType, params
+from cloth_entity import JointType, params
 
 
 class ClothDataLoader(DatasetMixin):
@@ -106,16 +106,17 @@ class ClothDataLoader(DatasetMixin):
         gaussian_heatmap = np.exp(-0.5 * grid_distance / sigma**2)
         return gaussian_heatmap
 
-    def generate_heatmaps(self, img, poses, heatmap_sigma):
+    def generate_heatmaps(self, img, pose, heatmap_sigma):
         heatmaps = np.zeros((0,) + img.shape[:-1])
         sum_heatmap = np.zeros(img.shape[:-1])
         for joint_index in range(len(JointType)):
             heatmap = np.zeros(img.shape[:-1])
-            for pose in poses:
-                if pose[joint_index, 2] > 0:
-                    jointmap = self.generate_gaussian_heatmap(img.shape[:-1], pose[joint_index][:2], heatmap_sigma)
-                    heatmap[jointmap > heatmap] = jointmap[jointmap > heatmap]
-                    sum_heatmap[jointmap > sum_heatmap] = jointmap[jointmap > sum_heatmap]
+            #for pose in poses:
+            #import ipdb; ipdb.set_trace()
+            if pose[joint_index, 2] > 0:
+                jointmap = self.generate_gaussian_heatmap(img.shape[:-1], pose[joint_index][:2], heatmap_sigma)
+                heatmap[jointmap > heatmap] = jointmap[jointmap > heatmap]
+                sum_heatmap[jointmap > sum_heatmap] = jointmap[jointmap > sum_heatmap]
             heatmaps = np.vstack((heatmaps, heatmap.reshape((1,) + heatmap.shape)))
         bg_heatmap = 1 - sum_heatmap  # background channel
         heatmaps = np.vstack((heatmaps, bg_heatmap[None]))
@@ -138,23 +139,23 @@ class ClothDataLoader(DatasetMixin):
         vertical_inner_product = vertical_unit_vector[0] * (grid_x - joint_from[0]) + vertical_unit_vector[1] * (grid_y - joint_from[1])
         vertical_paf_flag = np.abs(vertical_inner_product) <= paf_width
         paf_flag = horizontal_paf_flag & vertical_paf_flag
-        constant_paf = np.stack((paf_flag, paf_flag)) * np.broadcast_to(unit_vector, shape[:-1] + (2,)).transpose(2, 0, 1)
+        constant_paf = np.stack((paf_flag, paf_flag)) * np.broadcast_to(unit_vector, img_shape[:-1] + (2,)).transpose(2, 0, 1)
         return constant_paf
 
-    def generate_pafs(self, img, poses, paf_sigma):
+    def generate_pafs(self, img, pose, paf_sigma):
         pafs = np.zeros((0,) + img.shape[:-1])
 
         for limb in params['limbs_point']:
             paf = np.zeros((2,) + img.shape[:-1])
             paf_flags = np.zeros(paf.shape) # for constant paf
 
-            for pose in poses:
-                joint_from, joint_to = pose[limb]
-                if joint_from[2] > 0 and joint_to[2] > 0:
-                    limb_paf = self.generate_constant_paf(img.shape, joint_from[:2], joint_to[:2], paf_sigma)
-                    limb_paf_flags = limb_paf != 0
-                    paf_flags += np.broadcast_to(limb_paf_flags[0] | limb_paf_flags[1], limb_paf.shape)
-                    paf += limb_paf
+            #for pose in poses:
+            joint_from, joint_to = pose[limb]
+            if joint_from[2] > 0 and joint_to[2] > 0:
+                limb_paf = self.generate_constant_paf(img.shape, joint_from[:2], joint_to[:2], paf_sigma)
+                limb_paf_flags = limb_paf != 0
+                paf_flags += np.broadcast_to(limb_paf_flags[0] | limb_paf_flags[1], limb_paf.shape)
+                paf += limb_paf
 
             paf[paf_flags > 0] /= paf_flags[paf_flags > 0]
             pafs = np.vstack((pafs, paf))
@@ -173,7 +174,7 @@ class ClothDataLoader(DatasetMixin):
         pose = []
         pose_tmp = []
         json_file = osp.join(json_path, 'image.json')
-        pose = np.zeros((0, len(JointType), 3), dtype=np.int32)
+        #pose = np.zeros((0, len(JointType), 3), dtype=np.int32)
         with open(json_file) as f:
             data = json.load(f)
         for shape in data['shapes']:
