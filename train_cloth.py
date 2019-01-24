@@ -37,25 +37,6 @@ class GradientScaling(object):
                 with cuda.get_device_from_array(grad):
                     grad *= self.scale
 
-def get_data():
-    from cloth_data_loader import ClothDataLoader
-
-    dataset_train = ClothDataLoader(split='train')
-    class_names = dataset_train.class_names
-    iter_train = chainer.iterators,SerialIterator(
-        dataset_train, batch_size=1)
-
-    dataset_valid_raw = ClothDataLoader(split='val')
-    iter_valid_raw = chainer.iterators,SerialIterator(
-        dataset_valid_raw, batch_size=1, repeat=False, shuffle=False)
-
-    dataset_valid = ClothDataLoader(split='val')
-    iter_valid = chainer.iterators,SerialIterator(
-        dataset_valid, batch_size=1, repeat=False, shuffle=False)
-
-    return class_names, iter_train, iter_valid, iter_valid_raw
-
-
 def compute_loss(imgs, pafs_ys, heatmaps_ys, pafs_t, heatmaps_t, ignore_mask):
     heatmap_loss_log = []
     paf_loss_log = []
@@ -89,6 +70,25 @@ def compute_loss(imgs, pafs_ys, heatmaps_ys, pafs_t, heatmaps_t, ignore_mask):
         heatmap_loss_log.append(float(cuda.to_cpu(heatmaps_loss.data)))
 
     return total_loss, paf_loss_log, heatmap_loss_log
+
+def get_data():
+    from cloth_data_loader import ClothDataLoader
+
+    dataset_train = ClothDataLoader(split='train')
+    class_names = dataset_train.class_names
+    iter_train = chainer.iterators,SerialIterator(
+        dataset_train, batch_size=1)
+
+    # dataset_valid_raw = ClothDataLoader(split='val')
+    # iter_valid_raw = chainer.iterators,SerialIterator(
+    #     dataset_valid_raw, batch_size=1, repeat=False, shuffle=False)
+
+    dataset_valid = ClothDataLoader(split='val')
+    iter_valid = chainer.iterators,SerialIterator(
+        dataset_valid, batch_size=1, repeat=False, shuffle=False)
+
+    #return class_names, iter_train, iter_valid, iter_valid_raw
+    return class_names, iter_train, iter_valid
 
 
 def preprocess(imgs):
@@ -243,22 +243,26 @@ if __name__ == '__main__':
                 model[layer_name].disable_update()
 
     # Load datasets
-    coco_train = COCO(os.path.join(params['coco_dir'], 'annotations/person_keypoints_train2017.json'))
-    coco_val = COCO(os.path.join(params['coco_dir'], 'annotations/person_keypoints_val2017.json'))
-    train_loader = CocoDataLoader(coco_train, model.insize, mode='train')
-    val_loader = CocoDataLoader(coco_val, model.insize, mode='val', n_samples=args.val_samples)
+    # coco_train = COCO(os.path.join(params['coco_dir'], 'annotations/person_keypoints_train2017.json'))
+    # coco_val = COCO(os.path.join(params['coco_dir'], 'annotations/person_keypoints_val2017.json'))
+    # train_loader = CocoDataLoader(coco_train, model.insize, mode='train')
+    # val_loader = CocoDataLoader(coco_val, model.insize, mode='val', n_samples=args.val_samples)
+
+    #data
+    class_names, iter_train,iter_valid = get_data()
+    n_class = len(class_names)
 
     # Set up iterators
-    if args.loaderjob:
-        multiprocessing.set_start_method('spawn')  # to avoid MultiprocessIterator's bug
-        train_iter = chainer.iterators.MultiprocessIterator(
-            train_loader, args.batchsize, n_processes=args.loaderjob)
-        val_iter = chainer.iterators.MultiprocessIterator(
-            val_loader, args.valbatchsize, n_processes=args.loaderjob, repeat=False, shuffle=False)
-    else:
-        train_iter = chainer.iterators.SerialIterator(train_loader, args.batchsize)
-        val_iter = chainer.iterators.SerialIterator(
-            val_loader, args.valbatchsize, repeat=False, shuffle=False)
+    # if args.loaderjob:
+    #     multiprocessing.set_start_method('spawn')  # to avoid MultiprocessIterator's bug
+    #     train_iter = chainer.iterators.MultiprocessIterator(
+    #         train_loader, args.batchsize, n_processes=args.loaderjob)
+    #     val_iter = chainer.iterators.MultiprocessIterator(
+    #         val_loader, args.valbatchsize, n_processes=args.loaderjob, repeat=False, shuffle=False)
+    # else:
+    #     train_iter = chainer.iterators.SerialIterator(train_loader, args.batchsize)
+    #     val_iter = chainer.iterators.SerialIterator(
+    #         val_loader, args.valbatchsize, repeat=False, shuffle=False)
 
     # Set up a trainer
     updater = Updater(train_iter, model, optimizer, device=args.gpu)
