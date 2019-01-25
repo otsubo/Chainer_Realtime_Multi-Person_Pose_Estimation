@@ -17,7 +17,7 @@ from chainer.training import StandardUpdater, extensions
 from chainer import serializers, optimizers, functions as F
 
 from cloth_entity import params
-from cloth_estimation import ClothDataLoader
+from cloth_data_loader import ClothDataLoader
 
 from models import CocoPoseNet
 
@@ -37,7 +37,9 @@ class GradientScaling(object):
                 with cuda.get_device_from_array(grad):
                     grad *= self.scale
 
-def compute_loss(imgs, pafs_ys, heatmaps_ys, pafs_t, heatmaps_t, ignore_mask):
+def compute_loss(imgs, pafs_ys, heatmaps_ys, pafs_t, heatmaps_t):
+    import ipdb; ipdb.set_trace()
+    ignore_mask = np.zeros((1, 480, 640), dtype=bool)
     heatmap_loss_log = []
     paf_loss_log = []
     total_loss = 0
@@ -76,7 +78,7 @@ def get_data():
 
     dataset_train = ClothDataLoader(split='train')
     class_names = dataset_train.class_names
-    iter_train = chainer.iterators,SerialIterator(
+    iter_train = chainer.iterators.SerialIterator(
         dataset_train, batch_size=1)
 
     # dataset_valid_raw = ClothDataLoader(split='val')
@@ -84,11 +86,20 @@ def get_data():
     #     dataset_valid_raw, batch_size=1, repeat=False, shuffle=False)
 
     dataset_valid = ClothDataLoader(split='val')
-    iter_valid = chainer.iterators,SerialIterator(
+    iter_valid = chainer.iterators.SerialIterator(
         dataset_valid, batch_size=1, repeat=False, shuffle=False)
 
     #return class_names, iter_train, iter_valid, iter_valid_raw
     return class_names, iter_train, iter_valid
+
+# def get_trainer(optimizer, iter_train, iter_valid, class_names, args):
+#     model = optimizer.target
+
+#     updater = chainer.training.StandardUpdater(iter_train, optimizer, device=args.gpu)
+#     trainer = chainer.training.Trainer( updataer, (args.max_iteration, 'iteration'), output=args.out)
+
+#     trainer.extend(extensions.ProgressBar(update_interval=5))
+
 
 
 def preprocess(imgs):
@@ -97,6 +108,7 @@ def preprocess(imgs):
     x_data /= 255
     x_data -= 0.5
     x_data = x_data.transpose(0, 3, 1, 2)
+    #import ipdb; ipdb.set_trace()
     return x_data
 
 
@@ -124,14 +136,14 @@ class Updater(StandardUpdater):
 
         batch = train_iter.next()
 
-        imgs, pafs, heatmaps, ignore_mask = self.converter(batch, self.device)
+        imgs, pafs, heatmaps = self.converter(batch, self.device)
 
         x_data = preprocess(imgs)
+        #x_data = imgs
 
         pafs_ys, heatmaps_ys = optimizer.target(x_data)
-
         loss, paf_loss_log, heatmap_loss_log = compute_loss(
-            imgs, pafs_ys, heatmaps_ys, pafs, heatmaps, ignore_mask)
+            x_data, pafs_ys, heatmaps_ys, pafs, heatmaps)
 
         reporter.report({
             'main/loss': loss,
@@ -161,14 +173,15 @@ class Validator(extensions.Evaluator):
         for i, batch in enumerate(it):
             observation = {}
             with reporter.report_scope(observation):
-                imgs, pafs, heatmaps, ignore_mask = self.converter(batch, self.device)
+                imgs, pafs, heatmaps = self.converter(batch, self.device)
                 with function.no_backprop_mode():
                     x_data = preprocess(imgs)
+                    #x_data = imgs
 
                     pafs_ys, heatmaps_ys = model(x_data)
 
                     loss, paf_loss_log, heatmap_loss_log = compute_loss(
-                        imgs, pafs_ys, heatmaps_ys, pafs, heatmaps, ignore_mask)
+                        imgs, pafs_ys, heatmaps_ys, pafs, heatmaps)
 
                     observation['val/loss'] = cuda.to_cpu(loss.data)
                     observation['val/paf'] = sum(paf_loss_log)
@@ -181,7 +194,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train pose estimation')
     parser.add_argument('--arch', '-a', choices=params['archs'].keys(), default='posenet',
                         help='Model architecture')
-    parser.add_argument('--batchsize', '-B', type=int, default=10,
+    parser.add_argument('--batchsize', '-B', type=int, default=1,
                         help='Training minibatch size')
     parser.add_argument('--valbatchsize', '-b', type=int, default=4,
                         help='Validation minibatch size')
@@ -249,9 +262,8 @@ if __name__ == '__main__':
     # val_loader = CocoDataLoader(coco_val, model.insize, mode='val', n_samples=args.val_samples)
 
     #data
-    class_names, iter_train,iter_valid = get_data()
-    n_class = len(class_names)
-
+    class_names, train_iter,val_iter = get_data()
+    #n_class = len(class_names)
     # Set up iterators
     # if args.loaderjob:
     #     multiprocessing.set_start_method('spawn')  # to avoid MultiprocessIterator's bug
@@ -295,5 +307,5 @@ if __name__ == '__main__':
         pass
     with open(os.path.join(args.out, 'params.json'), 'w') as f:
         json.dump(vars(args), f)
-
+    #import ipdb; ipdb.set_trace()
     trainer.run()

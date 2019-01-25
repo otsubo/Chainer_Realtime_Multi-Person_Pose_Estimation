@@ -67,6 +67,8 @@ class ClothDataLoader(DatasetMixin):
         datum = datum[:, :, ::-1] # RGB -> BGR
         datum -= self.mean_bgr
         datum = datum.transpose((2, 0, 1))
+        datum = datum[np.newaxis,:,:,:]
+        #import ipdb; ipdb.set_trace()
         return datum
 
     def overlay_paf(self, img, paf):
@@ -194,8 +196,6 @@ class ClothDataLoader(DatasetMixin):
 
         img_file = osp.join(dataset_dir,data_id, 'image.png')
         img = scipy.misc.imread(img_file)
-        img_datum = self.img_to_datum(img)
-        img = np.array(img)
 
         json_file = osp.join(dataset_dir, data_id)
         pose = self.shapes_to_pose(json_file)
@@ -203,7 +203,9 @@ class ClothDataLoader(DatasetMixin):
         #todo: calculate pafs, heatmaps and return them
         #poses = self.parse_coco_annotation(annotations)
         img, pafs, heatmaps = self.generate_labels(img, pose)
-        return img, pafs, heatmaps,pose
+        #img_datum = self.img_to_datum(img)
+        img = np.array(img)
+        return img, pafs, heatmaps
 
 if __name__ =='__main__':
     import matplotlib.pyplot as plt
