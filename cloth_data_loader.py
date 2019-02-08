@@ -40,14 +40,14 @@ class ClothDataLoader(DatasetMixin):
     mean_bgr = np.array((104.00698793, 116.66876762, 122.67891434))
 
     #def __init__(self, split, retrun_image=False, return_all=False):
-    def __init__(self, split):
+    def __init__(self, split, return_image=False):
         #assert mode in ['train', 'val', 'eval'], 'Data loading mode is invalid.'
         assert split in ('train', 'val')
         ids = self._get_ids()
         iter_train, iter_val = train_test_split(
             ids, test_size= 0.2, random_state=np.random.RandomState(1234))
         self.ids = iter_train if split == 'tarin' else iter_val
-        #self._return_image = return_image
+        self._return_image = return_image
         #self._return_all = return_all
 
     def __len__(self):
@@ -56,7 +56,7 @@ class ClothDataLoader(DatasetMixin):
     def _get_ids(self):
         ids = []
         dataset_dir = chainer.dataset.get_dataset_directory(
-            'cloth_estimation/ClothV1')
+            'ClothV0')
         for data_id in os.listdir(dataset_dir):
             ids.append(osp.join('cloth_estimation', data_id))
         return ids
@@ -192,7 +192,7 @@ class ClothDataLoader(DatasetMixin):
         assert ann_id in ('cloth_estimation')
 
         dataset_dir = chainer.dataset.get_dataset_directory(
-            'cloth_estimation/ClothV1')
+            'ClothV0')
 
         img_file = osp.join(dataset_dir,data_id, 'image.png')
         img = scipy.misc.imread(img_file)
@@ -203,19 +203,23 @@ class ClothDataLoader(DatasetMixin):
         #todo: calculate pafs, heatmaps and return them
         #poses = self.parse_coco_annotation(annotations)
         img, pafs, heatmaps = self.generate_labels(img, pose)
-        #img_datum = self.img_to_datum(img)
+        img_datum = self.img_to_datum(img)
         img = np.array(img)
-        return img, pafs, heatmaps
+        img_datum = np.array(img_datum)
+        if self._return_image:
+            return img, pafs, heatmaps
+        else:
+            return img_datum, pafs, heatmaps
 
 if __name__ =='__main__':
     import matplotlib.pyplot as plt
-    dataset = ClothDataLoader('train')
+    dataset = ClothDataLoader('train', return_image=True)
     for i in range(len(dataset)):
-        img, pafs, heatmaps, pose = dataset.get_example(i)
+        img, pafs, heatmaps = dataset.get_example(i)
         print(img)
         print(pafs)
         print(heatmaps)
-        print(pose)
+        #print(pose)
         img_to_show = img.copy()
         img_to_show = dataset.overlay_pafs(img_to_show, pafs)
         img_to_show = dataset.overlay_heatmap(img_to_show, heatmaps[:-1].max(axis=0))

@@ -38,7 +38,7 @@ class GradientScaling(object):
                     grad *= self.scale
 
 def compute_loss(imgs, pafs_ys, heatmaps_ys, pafs_t, heatmaps_t):
-    import ipdb; ipdb.set_trace()
+    #import ipdb; ipdb.set_trace()
     ignore_mask = np.zeros((1, 480, 640), dtype=bool)
     heatmap_loss_log = []
     paf_loss_log = []
@@ -76,7 +76,7 @@ def compute_loss(imgs, pafs_ys, heatmaps_ys, pafs_t, heatmaps_t):
 def get_data():
     from cloth_data_loader import ClothDataLoader
 
-    dataset_train = ClothDataLoader(split='train')
+    dataset_train = ClothDataLoader(split='train', return_image=True)
     class_names = dataset_train.class_names
     iter_train = chainer.iterators.SerialIterator(
         dataset_train, batch_size=1)
@@ -85,7 +85,7 @@ def get_data():
     # iter_valid_raw = chainer.iterators,SerialIterator(
     #     dataset_valid_raw, batch_size=1, repeat=False, shuffle=False)
 
-    dataset_valid = ClothDataLoader(split='val')
+    dataset_valid = ClothDataLoader(split='val', return_image=True)
     iter_valid = chainer.iterators.SerialIterator(
         dataset_valid, batch_size=1, repeat=False, shuffle=False)
 
@@ -200,7 +200,7 @@ def parse_args():
                         help='Validation minibatch size')
     parser.add_argument('--val_samples', type=int, default=100,
                         help='Number of validation samples')
-    parser.add_argument('--iteration', '-i', type=int, default=300000,
+    parser.add_argument('--iteration', '-i', type=int, default=30000,
                         help='Number of iterations to train')
     parser.add_argument('--gpu', '-g', type=int, default=-1,
                         help='GPU ID (negative value indicates CPU')
@@ -212,6 +212,9 @@ def parse_args():
                         help='Initialize the trainer from given file')
     parser.add_argument('--out', '-o', default='result/test',
                         help='Output directory')
+    parser.add_argument('--interval_print', '-it', type=int, default=20,
+                        help='Interval print')
+
     parser.add_argument('--test', action='store_true')
     parser.set_defaults(test=False)
     args = parser.parse_args()
@@ -280,9 +283,9 @@ if __name__ == '__main__':
     updater = Updater(train_iter, model, optimizer, device=args.gpu)
     trainer = training.Trainer(updater, (args.iteration, 'iteration'), args.out)
 
-    val_interval = (10 if args.test else 1000), 'iteration'
+    val_interval = (10 if args.test else 500), 'iteration'
     log_interval = (1 if args.test else 20), 'iteration'
-
+    interval_print = 20
     trainer.extend(Validator(val_iter, model, device=args.gpu),
                    trigger=val_interval)
     trainer.extend(extensions.dump_graph('main/loss'))
@@ -294,6 +297,16 @@ if __name__ == '__main__':
         'epoch', 'iteration', 'main/loss', 'val/loss', 'main/paf', 'val/paf',
         'main/heat', 'val/heat',
     ]), trigger=log_interval)
+    trainer.extend(extensions.PlotReport(
+        y_keys=['main/loss'], x_key='iteration',
+        file_name='loss.png', trigger=(args.interval_print, 'iteration')))
+    trainer.extend(extensions.PlotReport(
+        y_keys=['main/paf'], x_key='iteration',
+        file_name='loss.png', trigger=(args.interval_print, 'iteration')))
+    trainer.extend(extensions.PlotReport(
+        y_keys=['main/heat'], x_key='iteration',
+        file_name='loss.png', trigger=(args.interval_print, 'iteration')))
+
     trainer.extend(extensions.ProgressBar(update_interval=1))
 
     if args.resume:
