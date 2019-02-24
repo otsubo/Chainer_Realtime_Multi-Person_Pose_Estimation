@@ -68,7 +68,6 @@ class ClothDataLoader(DatasetMixin):
         datum -= self.mean_bgr
         datum = datum.transpose((2, 0, 1))
         datum = datum[np.newaxis,:,:,:]
-        #import ipdb; ipdb.set_trace()
         return datum
 
     def overlay_paf(self, img, paf):
@@ -84,7 +83,6 @@ class ClothDataLoader(DatasetMixin):
     def overlay_pafs(self, img, pafs):
         mix_paf = np.zeros((2,) + img.shape[:-1])
         paf_flags = np.zeros(mix_paf.shape) # for constant paf
-
         for paf in pafs.reshape((int(pafs.shape[0]/2), 2,) + pafs.shape[1:]):
             paf_flags = paf != 0
             paf_flags += np.broadcast_to(paf_flags[0] | paf_flags[1], paf.shape)
@@ -114,7 +112,6 @@ class ClothDataLoader(DatasetMixin):
         for joint_index in range(len(JointType)):
             heatmap = np.zeros(img.shape[:-1])
             #for pose in poses:
-            #import ipdb; ipdb.set_trace()
             if pose[joint_index, 2] > 0:
                 jointmap = self.generate_gaussian_heatmap(img.shape[:-1], pose[joint_index][:2], heatmap_sigma)
                 heatmap[jointmap > heatmap] = jointmap[jointmap > heatmap]
@@ -200,8 +197,6 @@ class ClothDataLoader(DatasetMixin):
         json_file = osp.join(dataset_dir, data_id)
         pose = self.shapes_to_pose(json_file)
 
-        #todo: calculate pafs, heatmaps and return them
-        #poses = self.parse_coco_annotation(annotations)
         img, pafs, heatmaps = self.generate_labels(img, pose)
         img_datum = self.img_to_datum(img)
         img = np.array(img)
@@ -216,10 +211,6 @@ if __name__ =='__main__':
     dataset = ClothDataLoader('train', return_image=True)
     for i in range(len(dataset)):
         img, pafs, heatmaps = dataset.get_example(i)
-        print(img)
-        print(pafs)
-        print(heatmaps)
-        #print(pose)
         img_to_show = img.copy()
         img_to_show = dataset.overlay_pafs(img_to_show, pafs)
         img_to_show = dataset.overlay_heatmap(img_to_show, heatmaps[:-1].max(axis=0))
@@ -228,7 +219,3 @@ if __name__ =='__main__':
         k = cv2.waitKey(0)
         if k == ord('q'):
             sys.exit()
-    # for i in range(len(dataset)):
-    #     label_viz = hogehoge #todo
-    #     plt.subplot((221))
-    #     plt.show()

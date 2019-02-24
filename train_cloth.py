@@ -21,6 +21,7 @@ from cloth_data_loader import ClothDataLoader
 
 from models import CocoPoseNet
 
+import pose_net_viz_report
 
 class GradientScaling(object):
 
@@ -38,7 +39,6 @@ class GradientScaling(object):
                     grad *= self.scale
 
 def compute_loss(imgs, pafs_ys, heatmaps_ys, pafs_t, heatmaps_t):
-    #import ipdb; ipdb.set_trace()
     ignore_mask = np.zeros((1, 480, 640), dtype=bool)
     heatmap_loss_log = []
     paf_loss_log = []
@@ -53,7 +53,6 @@ def compute_loss(imgs, pafs_ys, heatmaps_ys, pafs_t, heatmaps_t):
         stage_heatmaps_t = heatmaps_t.copy()
         stage_paf_masks = paf_masks.copy()
         stage_heatmap_masks = heatmap_masks.copy()
-
         if pafs_y.shape != stage_pafs_t.shape:
             stage_pafs_t = F.resize_images(stage_pafs_t, pafs_y.shape[2:]).data
             stage_heatmaps_t = F.resize_images(stage_heatmaps_t, pafs_y.shape[2:]).data
@@ -81,16 +80,16 @@ def get_data():
     iter_train = chainer.iterators.SerialIterator(
         dataset_train, batch_size=1)
 
-    # dataset_valid_raw = ClothDataLoader(split='val')
-    # iter_valid_raw = chainer.iterators,SerialIterator(
-    #     dataset_valid_raw, batch_size=1, repeat=False, shuffle=False)
+    dataset_valid_raw = ClothDataLoader(split='val', return_image=True)
+    iter_valid_raw = chainer.iterators.SerialIterator(
+        dataset_valid_raw, batch_size=1, repeat=False, shuffle=False)
 
     dataset_valid = ClothDataLoader(split='val', return_image=True)
     iter_valid = chainer.iterators.SerialIterator(
         dataset_valid, batch_size=1, repeat=False, shuffle=False)
 
     #return class_names, iter_train, iter_valid, iter_valid_raw
-    return class_names, iter_train, iter_valid
+    return class_names, iter_train, iter_valid, iter_valid_raw
 
 # def get_trainer(optimizer, iter_train, iter_valid, class_names, args):
 #     model = optimizer.target
@@ -265,7 +264,7 @@ if __name__ == '__main__':
     # val_loader = CocoDataLoader(coco_val, model.insize, mode='val', n_samples=args.val_samples)
 
     #data
-    class_names, train_iter,val_iter = get_data()
+    class_names, train_iter, val_iter, valid_raw_iter= get_data()
     #n_class = len(class_names)
     # Set up iterators
     # if args.loaderjob:
@@ -285,27 +284,48 @@ if __name__ == '__main__':
 
     val_interval = (10 if args.test else 500), 'iteration'
     log_interval = (1 if args.test else 20), 'iteration'
-    interval_print = 20
+    interval_print = 100
     trainer.extend(Validator(val_iter, model, device=args.gpu),
                    trigger=val_interval)
     trainer.extend(extensions.dump_graph('main/loss'))
+
     trainer.extend(extensions.snapshot(), trigger=val_interval)
+
     trainer.extend(extensions.snapshot_object(
         model, 'model_iter_{.updater.iteration}'), trigger=val_interval)
     trainer.extend(extensions.LogReport(trigger=log_interval))
+
+    trainer.extend(extensions.snapshot_object(
+        target=model, filename='model_best.npz'),
+        trigger=chainer.training.triggers.MaxValueTrigger(
+            key='val/loss',
+            trigger=(500, 'iteration')))
+
     trainer.extend(extensions.PrintReport([
         'epoch', 'iteration', 'main/loss', 'val/loss', 'main/paf', 'val/paf',
         'main/heat', 'val/heat',
     ]), trigger=log_interval)
+
+    trainer.extend(
+        pose_net_viz_report.PoseNetVisReport(
+            model, valid_raw_iter,
+            device=args.gpu , shape=(4,2)),
+        trigger=(500, 'iteration'))
+
+    # trainer.extend(extensions.PlotReport(
+    #     y_keys=['main/heat'], x_key='iteration',
+    #     file_name='loss.png', trigger=(args.interval_print, 'iteration')))
+    # trainer.extend(extensions.PlotReport(
+    #     y_keys=['main/paf'], x_key='iteration',
+    #     file_name='loss.png', trigger=(args.interval_print, 'iteration')))
     trainer.extend(extensions.PlotReport(
         y_keys=['main/loss'], x_key='iteration',
         file_name='loss.png', trigger=(args.interval_print, 'iteration')))
+
     trainer.extend(extensions.PlotReport(
-        y_keys=['main/paf'], x_key='iteration',
-        file_name='loss.png', trigger=(args.interval_print, 'iteration')))
-    trainer.extend(extensions.PlotReport(
-        y_keys=['main/heat'], x_key='iteration',
-        file_name='loss.png', trigger=(args.interval_print, 'iteration')))
+        y_keys=['val/loss'], x_key='iteration',
+        file_name='val.png', trigger=(args.interval_print, 'iteration')))
+
 
     trainer.extend(extensions.ProgressBar(update_interval=1))
 
@@ -320,5 +340,4 @@ if __name__ == '__main__':
         pass
     with open(os.path.join(args.out, 'params.json'), 'w') as f:
         json.dump(vars(args), f)
-    #import ipdb; ipdb.set_trace()
     trainer.run()
