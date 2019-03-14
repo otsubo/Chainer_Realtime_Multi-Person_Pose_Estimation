@@ -199,7 +199,7 @@ def parse_args():
                         help='Validation minibatch size')
     parser.add_argument('--val_samples', type=int, default=100,
                         help='Number of validation samples')
-    parser.add_argument('--iteration', '-i', type=int, default=30000,
+    parser.add_argument('--iteration', '-i', type=int, default=300000,
                         help='Number of iterations to train')
     parser.add_argument('--gpu', '-g', type=int, default=-1,
                         help='GPU ID (negative value indicates CPU')
@@ -228,6 +228,7 @@ if __name__ == '__main__':
 
     if args.arch == 'posenet':
         CocoPoseNet.copy_vgg_params(model)
+        CocoPoseNet.copy_openpose_params(model)
 
     if args.initmodel:
         print('Load model from', args.initmodel)
@@ -282,9 +283,9 @@ if __name__ == '__main__':
     updater = Updater(train_iter, model, optimizer, device=args.gpu)
     trainer = training.Trainer(updater, (args.iteration, 'iteration'), args.out)
 
-    val_interval = (10 if args.test else 500), 'iteration'
+    val_interval = (10 if args.test else 100), 'iteration'
     log_interval = (1 if args.test else 20), 'iteration'
-    interval_print = 100
+    interval_print = 20
     trainer.extend(Validator(val_iter, model, device=args.gpu),
                    trigger=val_interval)
     trainer.extend(extensions.dump_graph('main/loss'))
@@ -299,7 +300,7 @@ if __name__ == '__main__':
         target=model, filename='model_best.npz'),
         trigger=chainer.training.triggers.MaxValueTrigger(
             key='val/loss',
-            trigger=(500, 'iteration')))
+            trigger=(100, 'iteration')))
 
     trainer.extend(extensions.PrintReport([
         'epoch', 'iteration', 'main/loss', 'val/loss', 'main/paf', 'val/paf',
@@ -310,7 +311,7 @@ if __name__ == '__main__':
         pose_net_viz_report.PoseNetVisReport(
             model, valid_raw_iter,
             device=args.gpu , shape=(4,2)),
-        trigger=(500, 'iteration'))
+        trigger=(200, 'iteration'))
 
     # trainer.extend(extensions.PlotReport(
     #     y_keys=['main/heat'], x_key='iteration',
@@ -319,11 +320,11 @@ if __name__ == '__main__':
     #     y_keys=['main/paf'], x_key='iteration',
     #     file_name='loss.png', trigger=(args.interval_print, 'iteration')))
     trainer.extend(extensions.PlotReport(
-        y_keys=['main/loss'], x_key='iteration',
+        y_keys=['main/loss', 'main/paf', 'main/heat'], x_key='iteration',
         file_name='loss.png', trigger=(args.interval_print, 'iteration')))
 
     trainer.extend(extensions.PlotReport(
-        y_keys=['val/loss'], x_key='iteration',
+        y_keys=['val/loss', 'val/paf', 'val/heat'], x_key='iteration',
         file_name='val.png', trigger=(args.interval_print, 'iteration')))
 
 

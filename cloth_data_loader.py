@@ -56,7 +56,7 @@ class ClothDataLoader(DatasetMixin):
     def _get_ids(self):
         ids = []
         dataset_dir = chainer.dataset.get_dataset_directory(
-            'ClothV0')
+            'ClothV2')
         for data_id in os.listdir(dataset_dir):
             ids.append(osp.join('cloth_estimation', data_id))
         return ids
@@ -189,7 +189,7 @@ class ClothDataLoader(DatasetMixin):
         assert ann_id in ('cloth_estimation')
 
         dataset_dir = chainer.dataset.get_dataset_directory(
-            'ClothV0')
+            'ClothV2')
 
         img_file = osp.join(dataset_dir,data_id, 'image.png')
         img = scipy.misc.imread(img_file)
