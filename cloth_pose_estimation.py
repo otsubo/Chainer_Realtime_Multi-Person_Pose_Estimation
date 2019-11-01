@@ -9,7 +9,7 @@ from scipy.ndimage.filters import gaussian_filter
 import chainer
 from chainer import cuda, serializers, functions as F
 
-from cloth_entity import params, JointType
+from cloth_entity_tmp import params, JointType
 from models.CocoPoseNet import CocoPoseNet
 
 import os.path as osp
@@ -75,9 +75,8 @@ class PoseDetector(object):
 
     def compute_peaks_from_heatmaps(self, heatmaps):
         """all_peaks: shape = [N, 5], column = (jointtype, x, y, score, index)"""
-        import ipdb; ipdb.set_trace()
         heatmaps = heatmaps[:-1]
-
+        #import ipdb; ipdb.set_trace()
         xp = cuda.get_array_module(heatmaps)
 
         if xp == np:
@@ -121,7 +120,6 @@ class PoseDetector(object):
             top_heatmaps[:, :, 1:] = heatmaps[:, :, :-1]
             bottom_heatmaps[:, :, :-1] = heatmaps[:, :, 1:]
 
-            #import ipdb; ipdb.set_trace()
             peaks_binary = xp.logical_and(heatmaps > params['heatmap_peak_thresh'], heatmaps >= right_heatmaps)
             peaks_binary = xp.logical_and(peaks_binary, heatmaps >= top_heatmaps)
             peaks_binary = xp.logical_and(peaks_binary, heatmaps >= left_heatmaps)
@@ -136,7 +134,6 @@ class PoseDetector(object):
 
     def compute_candidate_connections(self, paf, cand_a, cand_b, img_len, params):
         candidate_connections = []
-        #import ipdb; ipdb.set_trace()
         for joint_a in cand_a:
             for joint_b in cand_b:  # jointは(x, y)座標
                 vector = joint_b[:2] - joint_a[:2]
@@ -161,12 +158,12 @@ class PoseDetector(object):
         return candidate_connections
 
     def compute_connections(self, pafs, all_peaks, img_len, params):
-        #import ipdb; ipdb.set_trace()
         all_connections = []
         for i in range(len(params['limbs_point'])):
             paf_index = [i*2, i*2 + 1]
             paf = pafs[paf_index]
             limb_point = params['limbs_point'][i]
+            #import ipdb; ipdb.set_trace()
             cand_a = all_peaks[all_peaks[:, 0] == limb_point[0]][:, 1:]
             cand_b = all_peaks[all_peaks[:, 0] == limb_point[1]][:, 1:]
 
@@ -523,11 +520,9 @@ class PoseDetector(object):
 
 
 def draw_person_pose(orig_img, pose):
-    #import ipdb; ipdb.set_trace()
     if len(pose) == 0:
         print("detection failed")
         return orig_img
-
     # limb_colors = [
     #     [0, 255, 0], [0, 255, 85], [0, 255, 170], [0, 255, 255], [0, 170, 255],
     #     [0, 85, 255], [255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0.],
@@ -553,7 +548,11 @@ def draw_person_pose(orig_img, pose):
         [0, 170, 255]]
 
     canvas = orig_img.copy()
-
+    import ipdb; ipdb.set_trace()
+    if pose.shape != (1, 18, 3):
+        pose = pose[0,:,:].round().astype('i').reshape(18,3)
+    else:
+        pose = pose.round().astype('i').reshape(18,3)
     # limbs
     for i, (limb, color) in enumerate(zip(params['limbs_point'], limb_colors)):
         if i != 12 and i != 13:  # don't show ear-shoulder connection
@@ -592,7 +591,6 @@ if __name__ == '__main__':
     img = cv2.imread(args.img)
 
     # inference
-    #import ipdb; ipdb.set_trace()
     poses, _, heatmaps = pose_detector(img)
     #heatmaps = F.resize_images(heatmaps[np.newaxis,:,:,:] ,img[:, :, 0])
     heatmaps = cuda.to_cpu(heatmaps)
@@ -604,7 +602,6 @@ if __name__ == '__main__':
         tmp_heatmap = cv2.resize(heatmaps[i], (640, 480))
         tmp_heatmaps.append(tmp_heatmap)
     #     tmp_img = overlay_heatmap(tmp_img, tmp_heatmap)
-    #import ipdb; ipdb.set_trace()
     tmp_heatmaps = np.array(tmp_heatmaps)
     tmp_img = overlay_heatmap(tmp_img, tmp_heatmaps[:-1].max(axis=0))
     print('Saving result into result.png...')

@@ -2,11 +2,18 @@
 import os
 import os.path as osp
 
+import imageio
+import imgaug
+import imgaug.augmenters as iaa
+
 import chainer
 import json
 import numpy as np
-import scipy.misc
+
 from sklearn.model_selection import train_test_split
+
+import labelme
+import mvtk
 
 import sys
 
@@ -28,10 +35,10 @@ class ClothDataLoader(DatasetMixin):
         'Lcollar',
         'Rshoulder',
         'Lshoulder',
-        'Rleeve',
-        'Lleeve',
+        'Rsleeve',
+        'Lsleeve',
         'Rtrunk',
-        'Ltrunl',
+        'Ltrunk',
         'Rhem',
         'Lhem'
     ]
@@ -41,10 +48,11 @@ class ClothDataLoader(DatasetMixin):
         #assert mode in ['train', 'val', 'eval'], 'Data loading mode is invalid.'
         assert split in ('train', 'val')
         ids = self._get_ids()
+        ids = ids
         #print("ids_{}".format(ids))
         iter_train, iter_val = train_test_split(
             ids, test_size= 0.2, random_state=np.random.RandomState(1234))
-        self.ids = iter_train if split == 'tarin' else iter_val
+        self.ids = iter_train if split == 'train' else iter_val
         self._return_image = return_image
         self._img_aug = img_aug
 
@@ -54,7 +62,7 @@ class ClothDataLoader(DatasetMixin):
     def _get_ids(self):
         ids = []
         dataset_dir = chainer.dataset.get_dataset_directory(
-            'ClothV3')
+            '2019_09_02_mixed')
         for data_id in os.listdir(dataset_dir):
             ids.append(osp.join('cloth_estimation',data_id))
             #ids.append(data_id)
@@ -81,6 +89,7 @@ class ClothDataLoader(DatasetMixin):
 
     def overlay_pafs(self, img, pafs):
         mix_paf = np.zeros((2,) + img.shape[:-1])
+        #mix_paf = np.zeros((2, 480, 640))
         paf_flags = np.zeros(mix_paf.shape) # for constant paf
         for paf in pafs.reshape((int(pafs.shape[0]/2), 2,) + pafs.shape[1:]):
             paf_flags = paf != 0
@@ -171,8 +180,6 @@ class ClothDataLoader(DatasetMixin):
     def shapes_to_pose(self, json_file):
         pose = []
         pose_tmp = []
-        #json_file = osp.join(json_path, 'image.json')
-        #pose = np.zeros((0, len(JointType), 3), dtype=np.int32)
         with open(json_file) as f:
             data = json.load(f)
         for shape in data['shapes']:
@@ -182,30 +189,90 @@ class ClothDataLoader(DatasetMixin):
         pose = np.insert(pose, 2, viz_vec, axis=1)
         return pose
 
+    def lbl_to_pose(self, lbl):
+        pose = []
+        pose_tmp = []
+        for shape in data['shapes']:
+            pose_tmp = shape['points'][0]
+            pose.append(pose_tmp)
+        viz_vec = np.full((1, 10), 2)
+        pose = np.insert(pose, 2, viz_vec, axis=1)
+        return pose
+
+    def points_to_label(self, img_shape, shapes, label_name_to_value):
+        cls = np.zeros((480, 640), dtype=np.int32)
+        for shape in shapes:
+            points = shape['points']
+            label = shape['label']
+            shape_type = shape.get('shape_type', None)
+            cls_name = label
+            cls_id = label_name_to_value[cls_name]
+            mask = labelme.utils.shape_to_mask(img_shape[:2], points, 'point', line_width=1, point_size=1)
+            cls[mask] = cls_id
+        return cls
+
     def json_file_to_lbl(self, img_shape, json_file):
         label_name_to_value = {}
         for label_value, label_name in enumerate(self.class_names):
             label_name_to_value[label_name] = label_value
         with open(json_file) as f:
             data = json.load(f)
-        lbl = labelme.utils.shapes_to_label(
-            img_shape, data['shapes'], label_name_to_value
-        )
+        lbl = self.points_to_label(img_shape, data['shapes'], label_name_to_value)
+
         return lbl
 
     def get_example(self, i):
         ann_id, data_id = self.ids[i].split('/')
         assert ann_id in ('cloth_estimation')
         dataset_dir = chainer.dataset.get_dataset_directory(
-            'ClothV3')
+            '2019_09_02_mixed')
 
         img_file = osp.join(dataset_dir,data_id, 'image.png')
-        img = scipy.misc.imread(img_file)
-
+        #print("img_file:{}".format(img_file))
+        img = imageio.imread(img_file)
+        img_shape = img.shape
         json_file = osp.join(dataset_dir, data_id, 'image.json')
-        import ipdb; ipdb.set_trace()
-        pose = self.shapes_to_pose(json_file)
-
+        if self._img_aug:
+            lbl = self.json_file_to_lbl(img_shape, json_file)
+            obj_datum = dict(img=img)
+            random_state = np.random.RandomState()
+            st = lambda x: iaa.Sometimes(0.3 ,x)
+            augs = [
+                st(iaa.InColorspace(
+                    'HSV', children=iaa.WithChannels([1, 2],
+                                                     iaa.Multiply([0.3, 2.5])))),
+                st(iaa.GaussianBlur(sigma=[0.0, 1.0])),
+                st(iaa.AdditiveGaussianNoise(
+                    scale=(0.0, 0.1 * 255), per_channel=True)),
+            ]
+            obj_datum = next(mvtk.aug.augment_object_data(
+                [obj_datum], random_state=random_state, augmentations=augs))
+            img = obj_datum['img']
+            obj_datum2 = dict(img=img, lbl=lbl)
+            random_state2 = np.random.RandomState()
+            st2 = lambda x: iaa.Sometimes(0.7, x)  # NOQA
+            augs2 = [
+                st2(iaa.Affine(scale=(0.7, 1.3), order=0)),
+                st2(iaa.Affine(translate_percent={"x": (-0.1, 0.1), "y": (-0.1, 0.1)})),
+                st2(iaa.Affine(rotate=(-180, 180), order=0)),
+                st2(iaa.Affine(shear=(-30, 30), order=0)),
+            ]
+            obj_datum2 = next(mvtk.aug.augment_object_data(
+                [obj_datum2], random_state=random_state2, augmentations=augs2))
+            img = obj_datum2['img']
+            lbl = obj_datum2['lbl']
+            pose = []
+            pose_tmp = []
+            for i in range(11):
+                x = np.nanmean(np.where(lbl==i)[1]).round().astype('i')
+                y = np.nanmean(np.where(lbl==i)[0]).round().astype('i')
+                if x < 0 or y < 0:
+                    pose.append((0, 0, 0))
+                else:
+                    pose.append((x, y, 2))
+            pose = np.array(pose[1:])
+        else:
+            pose = self.shapes_to_pose(json_file)
         img, pafs, heatmaps = self.generate_labels(img, pose)
         img_datum = self.img_to_datum(img)
         img = np.array(img)
@@ -217,7 +284,7 @@ class ClothDataLoader(DatasetMixin):
 
 if __name__ =='__main__':
     import matplotlib.pyplot as plt
-    dataset = ClothDataLoader('val', return_image=True, img_aug=False)
+    dataset = ClothDataLoader('train', return_image=True, img_aug=True)
     for i in range(len(dataset)):
         img, pafs, heatmaps = dataset.get_example(i)
         img_to_show = img.copy()

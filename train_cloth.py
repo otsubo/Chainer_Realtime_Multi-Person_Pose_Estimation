@@ -16,8 +16,8 @@ from chainer import cuda, training, reporter, function
 from chainer.training import StandardUpdater, extensions
 from chainer import serializers, optimizers, functions as F
 
-from cloth_entity import params
-from cloth_data_loader import ClothDataLoader
+from cloth_entity_tmp import params
+from cloth_data_loader_tmp import ClothDataLoader
 
 from models import CocoPoseNet
 
@@ -73,18 +73,18 @@ def compute_loss(imgs, pafs_ys, heatmaps_ys, pafs_t, heatmaps_t):
     return total_loss, paf_loss_log, heatmap_loss_log
 
 def get_data():
-    from cloth_data_loader import ClothDataLoader
+    from cloth_data_loader_tmp import ClothDataLoader
 
-    dataset_train = ClothDataLoader(split='train', return_image=True)
+    dataset_train = ClothDataLoader(split='train', return_image=True, img_aug=True)
     class_names = dataset_train.class_names
     iter_train = chainer.iterators.SerialIterator(
         dataset_train, batch_size=1)
 
-    dataset_valid_raw = ClothDataLoader(split='val', return_image=True)
+    dataset_valid_raw = ClothDataLoader(split='val', return_image=True, img_aug=False)
     iter_valid_raw = chainer.iterators.SerialIterator(
         dataset_valid_raw, batch_size=1, repeat=False, shuffle=False)
 
-    dataset_valid = ClothDataLoader(split='val', return_image=True)
+    dataset_valid = ClothDataLoader(split='val', return_image=True, img_aug=False)
     iter_valid = chainer.iterators.SerialIterator(
         dataset_valid, batch_size=1, repeat=False, shuffle=False)
 
@@ -290,7 +290,7 @@ if __name__ == '__main__':
                    trigger=val_interval)
     trainer.extend(extensions.dump_graph('main/loss'))
 
-    trainer.extend(extensions.snapshot(), trigger=val_interval)
+    #trainer.extend(extensions.snapshot(), trigger=val_interval)
 
     trainer.extend(extensions.snapshot_object(
         model, 'model_iter_{.updater.iteration}'), trigger=val_interval)
