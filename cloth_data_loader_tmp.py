@@ -62,7 +62,7 @@ class ClothDataLoader(DatasetMixin):
     def _get_ids(self):
         ids = []
         dataset_dir = chainer.dataset.get_dataset_directory(
-            '2019_09_02_mixed')
+            '2019_11_28_pr2')
         for data_id in os.listdir(dataset_dir):
             ids.append(osp.join('cloth_estimation',data_id))
             #ids.append(data_id)
@@ -182,12 +182,23 @@ class ClothDataLoader(DatasetMixin):
         pose_tmp = []
         with open(json_file) as f:
             data = json.load(f)
-        for shape in data['shapes']:
-            pose_tmp = shape['points'][0]
-            pose.append(pose_tmp)
-        viz_vec = np.full((1, 10), 2)
-        pose = np.insert(pose, 2, viz_vec, axis=1)
-        return pose
+        print(json_file)
+        if len(data['shapes']) == 10:
+            for shape in data['shapes']:
+                pose_tmp = shape['points'][0]
+                pose.append(pose_tmp)
+            viz_vec = np.full((1, 10), 2)
+            pose = np.insert(pose, 2, viz_vec, axis=1)
+            return pose
+        else:
+            joint_list = ['Rcollar', 'Lcollar', 'Rshoulder', 'Lshoulder', 'Rsleeve', 'Lsleeve', 'Rtrunk', 'Ltrunk', 'Rhem', 'Lhem']
+            pose = np.zeros((10, 3))
+            for shape in data['shapes']:
+                index = joint_list.index(shape['label'])
+                pose[index][0] = round(shape[0][0])
+                pose[index][1] = round(shape[0][1])
+                pose[index][2] = 2
+            return pose
 
     def lbl_to_pose(self, lbl):
         pose = []
@@ -225,7 +236,7 @@ class ClothDataLoader(DatasetMixin):
         ann_id, data_id = self.ids[i].split('/')
         assert ann_id in ('cloth_estimation')
         dataset_dir = chainer.dataset.get_dataset_directory(
-            '2019_09_02_mixed')
+            '2019_11_28_pr2')
 
         img_file = osp.join(dataset_dir,data_id, 'image.png')
         #print("img_file:{}".format(img_file))
