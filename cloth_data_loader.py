@@ -32,7 +32,7 @@ class ClothDataLoader(DatasetMixin):
         'Lleeve',
         'Rtrunk',
         'Ctrunk',
-        'Ltrunl',
+        'Ltrunk',
         'Rhem',
         'Chem',
         'Lhem'
@@ -56,7 +56,7 @@ class ClothDataLoader(DatasetMixin):
     def _get_ids(self):
         ids = []
         dataset_dir = chainer.dataset.get_dataset_directory(
-            'ClothV2')
+            'ClothV3')
         for data_id in os.listdir(dataset_dir):
             ids.append(osp.join('cloth_estimation', data_id))
         return ids
@@ -98,10 +98,10 @@ class ClothDataLoader(DatasetMixin):
         return img
 
     # return shape: (height, width)
-    def generate_gaussian_heatmap(self, shape, joint, sigma):
+    def generate_gaussian_heatmap(self, img_shape, joint, sigma):
         x, y = joint
-        grid_x = np.tile(np.arange(shape[1]), (shape[0], 1))
-        grid_y = np.tile(np.arange(shape[0]), (shape[1], 1)).transpose()
+        grid_x = np.tile(np.arange(img_shape[1]), (img_shape[0], 1))
+        grid_y = np.tile(np.arange(img_shape[0]), (img_shape[1], 1)).transpose()
         grid_distance = (grid_x - x) ** 2 + (grid_y - y) ** 2
         gaussian_heatmap = np.exp(-0.5 * grid_distance / sigma**2)
         return gaussian_heatmap
@@ -189,7 +189,7 @@ class ClothDataLoader(DatasetMixin):
         assert ann_id in ('cloth_estimation')
 
         dataset_dir = chainer.dataset.get_dataset_directory(
-            'ClothV2')
+            'ClothV3')
 
         img_file = osp.join(dataset_dir,data_id, 'image.png')
         img = scipy.misc.imread(img_file)
