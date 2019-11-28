@@ -182,7 +182,6 @@ class ClothDataLoader(DatasetMixin):
         pose_tmp = []
         with open(json_file) as f:
             data = json.load(f)
-        print(json_file)
         if len(data['shapes']) == 10:
             for shape in data['shapes']:
                 pose_tmp = shape['points'][0]
@@ -195,8 +194,8 @@ class ClothDataLoader(DatasetMixin):
             pose = np.zeros((10, 3))
             for shape in data['shapes']:
                 index = joint_list.index(shape['label'])
-                pose[index][0] = round(shape[0][0])
-                pose[index][1] = round(shape[0][1])
+                pose[index][0] = round(shape['points'][0][0])
+                pose[index][1] = round(shape['points'][0][1])
                 pose[index][2] = 2
             return pose
 
