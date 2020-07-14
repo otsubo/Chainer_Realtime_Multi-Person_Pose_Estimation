@@ -60,9 +60,9 @@ class OnigiriDataLoader(DatasetMixin):
     def _get_ids(self):
         ids = []
         dataset_dir = chainer.dataset.get_dataset_directory(
-            '2019_11_28_pr2')
+            '5_onigiri_openpose_group_id')
         for data_id in os.listdir(dataset_dir):
-            ids.append(osp.join('5_onigiri_openpose',data_id))
+            ids.append(osp.join('5_onigiri_openpose_group_id',data_id))
             #ids.append(data_id)
         return ids
 
@@ -112,16 +112,16 @@ class OnigiriDataLoader(DatasetMixin):
         gaussian_heatmap = np.exp(-0.5 * grid_distance / sigma**2)
         return gaussian_heatmap
 
-    def generate_heatmaps(self, img, pose, heatmap_sigma):
+    def generate_heatmaps(self, img, poses, heatmap_sigma):
         heatmaps = np.zeros((0,) + img.shape[:-1])
         sum_heatmap = np.zeros(img.shape[:-1])
         for joint_index in range(len(JointType)):
             heatmap = np.zeros(img.shape[:-1])
-            #for pose in poses:
-            if pose[joint_index, 2] > 0:
-                jointmap = self.generate_gaussian_heatmap(img.shape[:-1], pose[joint_index][:2], heatmap_sigma)
-                heatmap[jointmap > heatmap] = jointmap[jointmap > heatmap]
-                sum_heatmap[jointmap > sum_heatmap] = jointmap[jointmap > sum_heatmap]
+            for pose in poses:
+                if pose[joint_index, 2] > 0:
+                    jointmap = self.generate_gaussian_heatmap(img.shape[:-1], pose[joint_index][:2], heatmap_sigma)
+                    heatmap[jointmap > heatmap] = jointmap[jointmap > heatmap]
+                    sum_heatmap[jointmap > sum_heatmap] = jointmap[jointmap > sum_heatmap]
             heatmaps = np.vstack((heatmaps, heatmap.reshape((1,) + heatmap.shape)))
         bg_heatmap = 1 - sum_heatmap  # background channel
         heatmaps = np.vstack((heatmaps, bg_heatmap[None]))
@@ -147,20 +147,20 @@ class OnigiriDataLoader(DatasetMixin):
         constant_paf = np.stack((paf_flag, paf_flag)) * np.broadcast_to(unit_vector, img_shape[:-1] + (2,)).transpose(2, 0, 1)
         return constant_paf
 
-    def generate_pafs(self, img, pose, paf_sigma):
+    def generate_pafs(self, img, poses, paf_sigma):
         pafs = np.zeros((0,) + img.shape[:-1])
 
         for limb in params['limbs_point']:
             paf = np.zeros((2,) + img.shape[:-1])
             paf_flags = np.zeros(paf.shape) # for constant paf
 
-            #for pose in poses:
-            joint_from, joint_to = pose[limb]
-            if joint_from[2] > 0 and joint_to[2] > 0:
-                limb_paf = self.generate_constant_paf(img.shape, joint_from[:2], joint_to[:2], paf_sigma)
-                limb_paf_flags = limb_paf != 0
-                paf_flags += np.broadcast_to(limb_paf_flags[0] | limb_paf_flags[1], limb_paf.shape)
-                paf += limb_paf
+            for pose in poses:
+                joint_from, joint_to = pose[limb]
+                if joint_from[2] > 0 and joint_to[2] > 0:
+                    limb_paf = self.generate_constant_paf(img.shape, joint_from[:2], joint_to[:2], paf_sigma)
+                    limb_paf_flags = limb_paf != 0
+                    paf_flags += np.broadcast_to(limb_paf_flags[0] | limb_paf_flags[1], limb_paf.shape)
+                    paf += limb_paf
 
             paf[paf_flags > 0] /= paf_flags[paf_flags > 0]
             pafs = np.vstack((pafs, paf))
@@ -175,27 +175,40 @@ class OnigiriDataLoader(DatasetMixin):
         pafs = self.generate_pafs(img, pose, params['paf_sigma'])
         return img, pafs, heatmaps
 
-    def shapes_to_pose(self, json_file):
-        pose = []
-        pose_tmp = []
+    def shapes_to_poses(self, json_file):
+        poses = []
+        joint_list = ['top', 'left', 'right']
         with open(json_file) as f:
             data = json.load(f)
-        if len(data['shapes']) == 10:
-            for shape in data['shapes']:
-                pose_tmp = shape['points'][0]
-                pose.append(pose_tmp)
-            viz_vec = np.full((1, 10), 2)
-            pose = np.insert(pose, 2, viz_vec, axis=1)
-            return pose
-        else:
-            joint_list = ['Rcollar', 'Lcollar', 'Rshoulder', 'Lshoulder', 'Rsleeve', 'Lsleeve', 'Rtrunk', 'Ltrunk', 'Rhem', 'Lhem']
-            pose = np.zeros((10, 3))
-            for shape in data['shapes']:
-                index = joint_list.index(shape['label'])
-                pose[index][0] = round(shape['points'][0][0])
-                pose[index][1] = round(shape['points'][0][1])
-                pose[index][2] = 2
-            return pose
+        d_array = np.array(data['shapes'])
+        gid_list = []
+        parts_list = []
+        points_list = []
+        for column in range(len(d_array)):
+            gid_list.append(d_array[column]['group_id'])
+            parts_list.append(d_array[column]['label'])
+            points_list.append(d_array[column]['points'])
+        gid_list = np.array(gid_list)
+        parts_list = np.array(parts_list)
+        points_list = np.array(points_list)
+        max_id = gid_list[-1]
+        import ipdb; ipdb.set_trace()
+        for index in range(max_id):
+            mask = (gid_list == 0)
+            for joint in joint_list:
+                if not(np.any(parts_list[mask]==joint)):
+                    
+
+        for shape in d_array:
+            points = []
+            for j in range(3):
+                points.append(shape[j]['points'][0])
+            points = np.array(points)
+            viz_vec = np.full((1, 3), 2)
+            points = np.insert(points, 2, viz_vec, axis=1)
+            poses.append(points)
+        poses = np.array(poses)
+        return poses
 
     def lbl_to_pose(self, lbl):
         pose = []
@@ -203,7 +216,7 @@ class OnigiriDataLoader(DatasetMixin):
         for shape in data['shapes']:
             pose_tmp = shape['points'][0]
             pose.append(pose_tmp)
-        viz_vec = np.full((1, 10), 2)
+        viz_vec = np.full((1, 3), 2)
         pose = np.insert(pose, 2, viz_vec, axis=1)
         return pose
 
@@ -231,9 +244,9 @@ class OnigiriDataLoader(DatasetMixin):
 
     def get_example(self, i):
         ann_id, data_id = self.ids[i].split('/')
-        assert ann_id in ('5_onigiri_openpose')
+        assert ann_id in ('5_onigiri_openpose_group_id')
         dataset_dir = chainer.dataset.get_dataset_directory(
-            '')
+            '5_onigiri_openpose_group_id')
 
         img_file = osp.join(dataset_dir,data_id, 'image.png')
         #print("img_file:{}".format(img_file))
@@ -280,8 +293,8 @@ class OnigiriDataLoader(DatasetMixin):
                     pose.append((x, y, 2))
             pose = np.array(pose[1:])
         else:
-            pose = self.shapes_to_pose(json_file)
-        img, pafs, heatmaps = self.generate_labels(img, pose)
+            poses = self.shapes_to_poses(json_file)
+        img, pafs, heatmaps = self.generate_labels(img, poses)
         img_datum = self.img_to_datum(img)
         img = np.array(img)
         img_datum = np.array(img_datum)
@@ -292,7 +305,7 @@ class OnigiriDataLoader(DatasetMixin):
 
 if __name__ =='__main__':
     import matplotlib.pyplot as plt
-    dataset = OnigiriDataLoader('train', return_image=True, img_aug=True)
+    dataset = OnigiriDataLoader('train', return_image=True, img_aug=False)
     for i in range(len(dataset)):
         img, pafs, heatmaps = dataset.get_example(i)
         img_to_show = img.copy()
