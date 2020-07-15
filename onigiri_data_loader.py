@@ -180,7 +180,7 @@ class OnigiriDataLoader(DatasetMixin):
         joint_list = ['top', 'left', 'right']
         with open(json_file) as f:
             data = json.load(f)
-        d_array = np.array(data['shapes'])
+        d_array = (data['shapes'])
         gid_list = []
         parts_list = []
         points_list = []
@@ -191,22 +191,21 @@ class OnigiriDataLoader(DatasetMixin):
         gid_list = np.array(gid_list)
         parts_list = np.array(parts_list)
         points_list = np.array(points_list)
-        max_id = gid_list[-1]
-        import ipdb; ipdb.set_trace()
+        max_id = gid_list[-1] + 1
+        pose = []
+        shape = []
         for index in range(max_id):
-            mask = (gid_list == 0)
+            mask = (gid_list == index)
             for joint in joint_list:
                 if not(np.any(parts_list[mask]==joint)):
-                    
-
-        for shape in d_array:
-            points = []
-            for j in range(3):
-                points.append(shape[j]['points'][0])
-            points = np.array(points)
-            viz_vec = np.full((1, 3), 2)
-            points = np.insert(points, 2, viz_vec, axis=1)
-            poses.append(points)
+                    pose = [0,0,0]
+                else:
+                    pose = (points_list[mask][np.where(parts_list[mask]==joint)[0][0]][0])
+                    pose = np.append(pose, 2)
+                shape.append(pose)
+                pose = []
+            poses.append(shape)
+            shape = []
         poses = np.array(poses)
         return poses
 
@@ -247,7 +246,7 @@ class OnigiriDataLoader(DatasetMixin):
         assert ann_id in ('5_onigiri_openpose_group_id')
         dataset_dir = chainer.dataset.get_dataset_directory(
             '5_onigiri_openpose_group_id')
-
+        print(data_id)
         img_file = osp.join(dataset_dir,data_id, 'image.png')
         #print("img_file:{}".format(img_file))
         img = imageio.imread(img_file)
