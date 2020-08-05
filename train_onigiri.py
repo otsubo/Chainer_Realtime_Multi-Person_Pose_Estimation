@@ -16,12 +16,13 @@ from chainer import cuda, training, reporter, function
 from chainer.training import StandardUpdater, extensions
 from chainer import serializers, optimizers, functions as F
 
-from cloth_entity_tmp import params
-from cloth_data_loader_tmp import ClothDataLoader
+from onigiri_entity import params
+from onigiri_data_loader import OnigiriDataLoader
 
-from models import CocoPoseNet
+#from models import CocoPoseNet
+import CocoPoseNet
 
-import pose_net_viz_report
+#import pose_net_viz_report
 
 class GradientScaling(object):
 
@@ -48,6 +49,7 @@ def compute_loss(imgs, pafs_ys, heatmaps_ys, pafs_t, heatmaps_t):
     heatmap_masks = ignore_mask[:, None].repeat(heatmaps_t.shape[1], axis=1)
 
     # compute loss on each stage
+    import ipdb; ipdb.set_trace()
     for pafs_y, heatmaps_y in zip(pafs_ys, heatmaps_ys):
         stage_pafs_t = pafs_t.copy()
         stage_heatmaps_t = heatmaps_t.copy()
@@ -73,18 +75,18 @@ def compute_loss(imgs, pafs_ys, heatmaps_ys, pafs_t, heatmaps_t):
     return total_loss, paf_loss_log, heatmap_loss_log
 
 def get_data():
-    from cloth_data_loader_tmp import ClothDataLoader
+    from onigiri_data_loader import OnigiriDataLoader
 
-    dataset_train = ClothDataLoader(split='train', return_image=True, img_aug=True)
+    dataset_train = OnigiriDataLoader(split='train', return_image=True, img_aug=False)
     class_names = dataset_train.class_names
     iter_train = chainer.iterators.SerialIterator(
         dataset_train, batch_size=1)
 
-    dataset_valid_raw = ClothDataLoader(split='val', return_image=True, img_aug=False)
+    dataset_valid_raw = OnigiriDataLoader(split='val', return_image=True, img_aug=False)
     iter_valid_raw = chainer.iterators.SerialIterator(
         dataset_valid_raw, batch_size=1, repeat=False, shuffle=False)
 
-    dataset_valid = ClothDataLoader(split='val', return_image=True, img_aug=False)
+    dataset_valid = OnigiriDataLoader(split='val', return_image=True, img_aug=False)
     iter_valid = chainer.iterators.SerialIterator(
         dataset_valid, batch_size=1, repeat=False, shuffle=False)
 
@@ -134,7 +136,7 @@ class Updater(StandardUpdater):
             optimizer.alpha = 1e-6
 
         batch = train_iter.next()
-
+        import ipdb; ipdb.set_trace()
         imgs, pafs, heatmaps = self.converter(batch, self.device)
 
         x_data = preprocess(imgs)
@@ -224,11 +226,12 @@ if __name__ == '__main__':
     args = parse_args()
 
     # Prepare model
-    model = params['archs'][args.arch]()
+    #model = params['archs'][args.arch]()
+    model = CocoPoseNet.CocoPoseNet()
 
-    if args.arch == 'posenet':
-        CocoPoseNet.copy_vgg_params(model)
-        CocoPoseNet.copy_openpose_params(model)
+    #if args.arch == 'posenet':
+        #CocoPoseNet.copy_vgg_params(model)
+        #CocoPoseNet.copy_openpose_params(model)
 
     if args.initmodel:
         print('Load model from', args.initmodel)
@@ -307,11 +310,11 @@ if __name__ == '__main__':
         'main/heat', 'val/heat',
     ]), trigger=log_interval)
 
-    trainer.extend(
-        pose_net_viz_report.PoseNetVisReport(
-            model, valid_raw_iter,
-            device=args.gpu , shape=(4,2)),
-        trigger=(200, 'iteration'))
+    # trainer.extend(
+    #     pose_net_viz_report.PoseNetVisReport(
+    #         model, valid_raw_iter,
+    #         device=args.gpu , shape=(4,2)),
+    #     trigger=(200, 'iteration'))
 
     # trainer.extend(extensions.PlotReport(
     #     y_keys=['main/heat'], x_key='iteration',
